@@ -44,5 +44,3 @@ if st.button("Ver Animal Actual"):
             st.write(f"Valor del potenciómetro: {data['valor']}")
     else:
         st.warning("Esperando datos del ESP32...")
-    else:
-        st.warning("No se recibió ningún dato durante la escucha.")
