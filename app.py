@@ -1,46 +1,48 @@
 import streamlit as st
 import paho.mqtt.client as mqtt
 import json
-import time
 
-# Variables para guardar el último mensaje recibido
+# Configuración inicial de la página
 st.set_page_config(page_title="Selector de Animal", page_icon=":paw_prints:")
-if "last_animal" not in st.session_state:
-    st.session_state.last_animal = None
-    st.session_state.last_valor = None
 
-# Función de callback al recibir mensaje
+# Guarda el último mensaje recibido
+if "last_payload" not in st.session_state:
+    st.session_state.last_payload = None
+
+# Función que se llama cuando llega un mensaje MQTT
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
-        st.session_state.last_animal = data.get("animal")
-        st.session_state.last_valor = data.get("valor")
+        st.session_state.last_payload = data
     except Exception as e:
-        st.session_state.last_animal = "Error"
-        st.session_state.last_valor = str(e)
+        st.session_state.last_payload = {"error": str(e)}
 
-# Configurar el cliente MQTT
-client = mqtt.Client()
-client.on_message = on_message
-client.connect("broker.mqttdashboard.com", 1883, 60)
-client.subscribe("selector/animal")
-client.loop_start()
+# Crear un cliente MQTT singleton
+@st.experimental_singleton
+def get_mqtt_client():
+    client = mqtt.Client()
+    client.on_message = on_message
+    client.connect("broker.mqttdashboard.com", 1883, 60)
+    client.subscribe("selector/animal")
+    client.loop_start()
+    return client
 
-# Interfaz Streamlit
+# Iniciar MQTT
+get_mqtt_client()
+
+# Interfaz de Streamlit
 st.title("Visualizador de Animal por Potenciómetro")
-st.write("Pulsa el botón para mostrar el animal seleccionado actualmente.")
+st.write("Pulsa el botón para mostrar el último valor recibido del ESP32.")
 
 if st.button("Ver Animal Actual"):
-    st.info("Escuchando MQTT durante 3 segundos...")
-
-    # Esperar y permitir que lleguen mensajes
-    for _ in range(6):  # 6 ciclos de 0.5s = 3 segundos
-        client.loop(timeout=0.5)
-        time.sleep(0.5)
-
-    # Mostrar el último mensaje recibido
-    if st.session_state.last_animal:
-        st.success(f"Animal seleccionado: *{st.session_state.last_animal}*")
-        st.write(f"Valor del potenciómetro: {st.session_state.last_valor}")
+    if st.session_state.last_payload:
+        data = st.session_state.last_payload
+        if "error" in data:
+            st.error(f"Error al procesar JSON: {data['error']}")
+        else:
+            st.success(f"Animal seleccionado: *{data['animal']}*")
+            st.write(f"Valor del potenciómetro: {data['valor']}")
+    else:
+        st.warning("Esperando datos del ESP32...")
     else:
         st.warning("No se recibió ningún dato durante la escucha.")
